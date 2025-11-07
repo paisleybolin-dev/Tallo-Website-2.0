@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Tallo – Kid‑Friendly App (Demo)</title>
+  <!-- Tailwind Play CDN (sufficient for small demo apps) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React 18 + Babel for in-browser JSX compilation -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    body { color: #1E0F41; }
+  </style>
+</head>
+<body class="bg-white">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const {{ useEffect, useMemo, useState, createElement }} = React;
+
+    // --- Utilities ---
+    const LS_KEYS = {{
+      profile: "tallo.kid.profile",
+      quests: "tallo.kid.quests",
+      badges: "tallo.kid.badges",
+      consent: "tallo.kid.parentalConsent",
+    }};
+
+    function loadLS(key, fallback) {{
+      try {{
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : fallback;
+      }} catch {{
+        return fallback;
+      }}
+    }}
+    function saveLS(key, value) {{
+      try {{
+        localStorage.setItem(key, JSON.stringify(value));
+      }} catch (e) {{
+        console.warn("localStorage error", e);
+      }}
+    }}
+
+    // --- Mock Data ---
+    const CAREERS = [
+      {{ id: "software", name: "Software Developer", emoji: "💻", blurb: "Build apps and games that help people.", skills: ["Problem solving", "Coding", "Teamwork"] }},
+      {{ id: "nurse", name: "Nurse", emoji: "🩺", blurb: "Care for patients and support doctors.", skills: ["Empathy", "Biology", "Calm under pressure"] }},
+      {{ id: "electrician", name: "Electrician", emoji: "⚡", blurb: "Install and fix electrical systems.", skills: ["Safety", "Tools", "Blueprints"] }},
+      {{ id: "chef", name: "Chef", emoji: "🍳", blurb: "Create tasty food for people to enjoy.", skills: ["Creativity", "Timing", "Knife skills"] }},
+      {{ id: "teacher", name: "Teacher", emoji: "📚", blurb: "Help students learn new things.", skills: ["Communication", "Planning", "Patience"] }},
+    ];
+
+    const DEFAULT_QUESTS = [
+      {{ id: "q1", title: "Pick 3 interests", points: 10, done: false }},
+      {{ id: "q2", title: "Explore 2 careers", points: 20, done: false }},
+      {{ id: "q3", title: "Earn your first badge", points: 15, done: false }},
+    ];
+
+    const BADGE_DEFS = [
+      {{ id: "b_starter", name: "Starter", emoji: "🌟", rule: (state) => (state.interests?.length || 0) >= 3 }},
+      {{ id: "b_explorer", name: "Explorer", emoji: "🧭", rule: (state) => (state.viewedCareers?.length || 0) >= 2 }},
+      {{ id: "b_finisher", name: "Finisher", emoji: "🏁", rule: (state) => state.quests?.every((q) => q.done) }},
+    ];
+
+    // --- App ---
+    function TalloKidApp() {{
+      const [tab, setTab] = useState("home");
+      const [mobileOpen, setMobileOpen] = useState(false);
+
+      const [profile, setProfile] = useState(() => loadLS(LS_KEYS.profile, {{ name: "", age: "", interests: [], viewedCareers: [] }}));
+      const [quests, setQuests] = useState(() => loadLS(LS_KEYS.quests, DEFAULT_QUESTS));
+      const [badges, setBadges] = useState(() => loadLS(LS_KEYS.badges, []));
+      const [consent, setConsent] = useState(() => loadLS(LS_KEYS.consent, {{ accepted: false, name: "", relationship: "" }}));
+
+      useEffect(() => saveLS(LS_KEYS.profile, profile), [profile]);
+      useEffect(() => saveLS(LS_KEYS.quests, quests), [quests]);
+      useEffect(() => saveLS(LS_KEYS.badges, badges), [badges]);
+      useEffect(() => saveLS(LS_KEYS.consent, consent), [consent]);
+
+      const points = useMemo(() => quests.reduce((acc, q) => acc + (q.done ? q.points : 0), 0), [quests]);
+
+      useEffect(() => {{
+        const state = {{ ...profile, quests }};
+        const newlyEarned = BADGE_DEFS.filter((b) => b.rule(state)).map((b) => b.id);
+        const has = new Set(badges);
+        let changed = false;
+        newlyEarned.forEach((id) => {{
+          if (!has.has(id)) {{ has.add(id); changed = true; }}
+        }});
+        if (changed) setBadges(Array.from(has));
+      }}, [profile, quests]);
+
+      function toggleQuest(id) {{
+        setQuests((prev) => prev.map((q) => (q.id === id ? {{ ...q, done: !q.done }} : q)));
+      }}
+      function addInterest(i) {{
+        setProfile((p) => {{
+          if (p.interests.includes(i)) return p;
+          const next = {{ ...p, interests: [...p.interests, i] }};
+          if (next.interests.length >= 3) {{
+            setQuests((prev) => prev.map((q) => (q.id === "q1" ? {{ ...q, done: true }} : q)));
+          }}
+          return next;
+        }});
+      }}
+      function viewCareer(id) {{
+        setProfile((p) => {{
+          if (p.viewedCareers.includes(id)) return p;
+          const next = {{ ...p, viewedCareers: [...p.viewedCareers, id] }};
+          if (next.viewedCareers.length >= 2) {{
+            setQuests((prev) => prev.map((q) => (q.id === "q2" ? {{ ...q, done: true }} : q)));
+          }}
+          return next;
+        }});
+      }}
+      useEffect(() => {{
+        if (badges.length > 0) {{
+          setQuests((prev) => prev.map((q) => (q.id === "q3" ? {{ ...q, done: true }} : q)));
+        }}
+      }}, [badges.length]);
+
+      const TABS = [
+        {{ id: "home", label: "Home" }},
+        {{ id: "explore", label: "Explore Careers" }},
+        {{ id: "quests", label: "Quests" }},
+        {{ id: "badges", label: "Badges" }},
+        {{ id: "profile", label: "Profile" }},
+        {{ id: "guardian", label: "Parent/Guardian" }},
+      ];
+
+      const brand = {{
+        purple: "#8971EB",
+        night: "#1E0F41",
+        lilac: "#E2D6FF",
+        green: "#BDF184",
+        gray: "#E5E4E3",
+      }};
+
+      function Header() {{
+        return (
+          <header className="sticky top-0 z-40 backdrop-blur bg-white/80 border-b" style={{ borderColor: brand.gray }}>
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <img src="./assets/tallo-logo.svg" alt="Tallo logo" className="h-8 w-auto" />
+                <span className="font-semibold tracking-tight">Tallo</span>
+              </div>
+              <nav className="hidden md:flex items-center gap-4 text-sm">
+                {TABS.map((t) => (
+                  <button key={t.id} className={\`px-3 py-2 rounded-xl \${tab === t.id ? "font-semibold" : "opacity-80 hover:opacity-100"}\`} onClick={() => setTab(t.id)} aria-current={tab === t.id ? "page" : undefined}>
+                    {t.label}
+                  </button>
+                ))}
+              </nav>
+              <div className="hidden md:flex items-center gap-3">
+                <span className="text-xs text-[#4A494D]">Points: <strong>{points}</strong></span>
+                <button className="px-4 py-2 rounded-xl font-semibold text-[#1E0F41] text-sm" style={{ backgroundColor: brand.green }} onClick={() => setTab("quests")}>
+                  Continue
+                </button>
+              </div>
+              <button className="md:hidden" onClick={() => setMobileOpen(!mobileOpen)} aria-label="Open menu">
+                <div className="w-6 h-0.5 mb-1" style={{ backgroundColor: brand.night }} />
+                <div className="w-6 h-0.5 mb-1" style={{ backgroundColor: brand.night }} />
+                <div className="w-6 h-0.5" style={{ backgroundColor: brand.night }} />
+              </button>
+            </div>
+            {mobileOpen && (
+              <div className="md:hidden border-t" style={{ borderColor: brand.gray }}>
+                <div className="px-4 py-3 grid grid-cols-2 gap-2 text-sm">
+                  {TABS.map((t) => (
+                    <button key={t.id} className={\`px-3 py-2 rounded-xl border text-left \${tab === t.id ? "bg-white" : "bg-white/60"}\`} style={{ borderColor: brand.gray }} onClick={() => {{ setTab(t.id); setMobileOpen(false); }}}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </header>
+        );
+      }}
+
+      function TopRibbon() {{
+        return (
+          <div className="w-full text-center text-sm py-2" style={{ backgroundColor: brand.lilac, color: brand.night }}>
+            🎮 Kid‑Friendly Mode • Learn about careers, earn badges, and level up your skills!
+          </div>
+        );
+      }}
+
+      function Home() {{
+        return (
+          <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
+            <div className="grid lg:grid-cols-2 gap-8 items-center">
+              <div>
+                <h1 className="text-4xl sm:text-5xl font-extrabold leading-tight" style={{ color: brand.night }}>
+                  Find what you love. Build skills. Earn badges.
+                </h1>
+                <p className="mt-4 text-lg text-[#303033] max-w-xl">
+                  Explore real jobs with simple explanations, try mini‑quests, and track your progress. Your info stays private and you control what to share.
+                </p>
+                <div className="mt-6 flex flex-col sm:flex-row gap-3">
+                  <button className="px-6 py-3 rounded-2xl font-semibold shadow-sm" style={{ backgroundColor: brand.green, color: brand.night }} onClick={() => setTab("quests")}>Start a quest</button>
+                  <button className="px-6 py-3 rounded-2xl font-semibold border" style={{ borderColor: brand.gray, color: brand.night }} onClick={() => setTab("explore")}>Explore careers</button>
+                </div>
+                <ul className="mt-6 grid grid-cols-2 gap-4 text-sm">
+                  <li className="flex items-start gap-2"><span className="mt-1 inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: brand.purple }}></span> Points: {points}</li>
+                  <li className="flex items-start gap-2"><span className="mt-1 inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: brand.purple }}></span> Badges: {badges.length}</li>
+                </ul>
+              </div>
+              <div>
+                <div className="aspect-[4/3] w-full rounded-3xl border" style={{ borderColor: brand.gray, background: \`linear-gradient(180deg, \${brand.lilac} 0%, #FFFFFF 60%)\` }}>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="text-center p-8">
+                      <div className="mx-auto w-24 h-24 rounded-2xl" style={{ backgroundColor: brand.purple }} />
+                      <p className="mt-4 text-sm text-[#666666]">(Add a kid‑friendly illustration here)</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        );
+      }}
+
+      function Explore() {{
+        return (
+          <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
+            <h2 className="text-3xl font-bold">Explore Careers</h2>
+            <p className="mt-2 text-[#4A494D]">Tap a card to learn what the job does and which skills help.</p>
+            <div className="mt-6 grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {CAREERS.map((c) => (
+                <button key={c.id} onClick={() => viewCareer(c.id)} className="rounded-2xl p-6 bg-white border text-left hover:shadow" style={{ borderColor: brand.gray }}>
+                  <div className="text-4xl" aria-hidden>{c.emoji}</div>
+                  <h3 className="mt-3 font-semibold text-lg">{c.name}</h3>
+                  <p className="mt-1 text-sm text-[#4A494D]">{c.blurb}</p>
+                  <div className="mt-3 text-xs text-[#4A494D]">Skills: {c.skills.join(", ")}</div>
+                  {profile.viewedCareers.includes(c.id) && (
+                    <div className="mt-3 inline-block text-xs px-2 py-1 rounded-full" style={{ backgroundColor: brand.lilac, color: brand.night }}>Viewed ✓</div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </section>
+        );
+      }}
+
+      function Quests() {{
+        return (
+          <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
+            <h2 className="text-3xl font-bold">Quests</h2>
+            <p className="mt-2 text-[#4A494D]">Complete simple tasks to earn points and unlock badges.</p>
+            <ul className="mt-6 space-y-3">
+              {quests.map((q) => (
+                <li key={q.id} className="rounded-2xl p-4 bg-white border flex items-center justify-between" style={{ borderColor: brand.gray }}>
+                  <div>
+                    <div className="font-semibold">{q.title}</div>
+                    <div className="text-xs text-[#4A494D]">{q.points} pts</div>
+                  </div>
+                  <button className={\`px-4 py-2 rounded-xl font-semibold \${q.done ? "opacity-80" : ""}\`} style={{ backgroundColor: brand.green, color: brand.night }} onClick={() => toggleQuest(q.id)} aria-pressed={q.done}>
+                    {q.done ? "Completed" : "Mark done"}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      }}
+
+      function Badges() {{
+        const earned = BADGE_DEFS.filter((b) => badges.includes(b.id));
+        const locked = BADGE_DEFS.filter((b) => !badges.includes(b.id));
+        return (
+          <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
+            <h2 className="text-3xl font-bold">Badges</h2>
+            <p className="mt-2 text-[#4A494D]">Badges unlock as you complete quests and explore careers.</p>
+            <div className="mt-6 grid md:grid-cols-3 gap-6">
+              {earned.map((b) => (
+                <div key={b.id} className="rounded-2xl p-6 bg-white border" style={{ borderColor: brand.gray }}>
+                  <div className="text-4xl">{b.emoji}</div>
+                  <div className="mt-2 font-semibold">{b.name}</div>
+                  <div className="text-xs text-[#4A494D]">Unlocked ✓</div>
+                </div>
+              ))}
+              {locked.map((b) => (
+                <div key={b.id} className="rounded-2xl p-6 bg-white border opacity-70" style={{ borderColor: brand.gray }}>
+                  <div className="text-4xl" aria-hidden>{b.emoji}</div>
+                  <div className="mt-2 font-semibold">{b.name}</div>
+                  <div className="text-xs text-[#4A494D]">Locked</div>
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+      }}
+
+      function Profile() {{
+        const PRESETS = ["Art", "Science", "Sports", "Coding", "Helping", "Building", "Cooking", "Outdoors"];
+        return (
+          <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
+            <h2 className="text-3xl font-bold">Your Profile</h2>
+            <div className="mt-4 grid md:grid-cols-2 gap-6">
+              <div className="rounded-2xl p-6 bg-white border" style={{ borderColor: brand.gray }}>
+                <label className="block text-sm font-semibold">First name</label>
+                <input value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} className="mt-1 w-full rounded-xl px-3 py-2 border" style={{ borderColor: brand.gray }} placeholder="e.g., Alex" />
+
+                <label className="block text-sm font-semibold mt-4">Age</label>
+                <input value={profile.age} onChange={(e) => setProfile({ ...profile, age: e.target.value })} className="mt-1 w-full rounded-xl px-3 py-2 border" style={{ borderColor: brand.gray }} placeholder="e.g., 15" />
+
+                <div className="mt-6">
+                  <div className="text-sm font-semibold">Interests (choose at least 3)</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {PRESETS.map((i) => {{
+                      const active = profile.interests.includes(i);
+                      return (
+                        <button key={i} onClick={() => addInterest(i)} className={\`px-3 py-1.5 rounded-full border text-sm \${active ? "" : "opacity-90"}\`} style={{ borderColor: brand.gray, backgroundColor: active ? brand.lilac : "white" }}>
+                          {i}
+                        </button>
+                      );
+                    }})}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl p-6 bg-white border" style={{ borderColor: brand.gray }}>
+                <div className="font-semibold">Progress</div>
+                <div className="mt-2 text-sm text-[#4A494D]">Points: {points}</div>
+                <div className="mt-1 text-sm text-[#4A494D]">Badges: {badges.length} / {BADGE_DEFS.length}</div>
+                <div className="mt-4 text-sm text-[#4A494D]">Viewed careers: {profile.viewedCareers.length}</div>
+                <button className="mt-6 px-4 py-2 rounded-xl font-semibold" style={{ backgroundColor: brand.green, color: brand.night }} onClick={() => {{ localStorage.clear(); location.reload(); }}}>Reset all progress</button>
+              </div>
+            </div>
+          </section>
+        );
+      }}
+
+      function Guardian() {{
+        return (
+          <section className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-10">
+            <h2 className="text-3xl font-bold">Parent/Guardian</h2>
+            <p className="mt-2 text-[#4A494D]">This kid‑friendly mode stores progress only on this device (localStorage). No accounts or messages are created. Kids can explore careers and skills privately.</p>
+            <div className="mt-6 rounded-2xl p-6 bg-white border" style={{ borderColor: brand.gray }}>
+              <div className="font-semibold">Consent</div>
+              <p className="mt-1 text-sm text-[#4A494D]">Optionally record that a parent/guardian has reviewed and approved use of this learning tool on this device.</p>
+              <div className="grid md:grid-cols-3 gap-3 mt-3">
+                <input value={consent.name} onChange={(e) => setConsent({ ...consent, name: e.target.value })} className="rounded-xl px-3 py-2 border" style={{ borderColor: brand.gray }} placeholder="Guardian name" />
+                <input value={consent.relationship} onChange={(e) => setConsent({ ...consent, relationship: e.target.value })} className="rounded-xl px-3 py-2 border" style={{ borderColor: brand.gray }} placeholder="Relationship (e.g., parent)" />
+                <label className="inline-flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={consent.accepted} onChange={(e) => setConsent({ ...consent, accepted: e.target.checked })} />
+                  I approve learning use on this device
+                </label>
+              </div>
+              <div className="text-xs text-[#8C8B8B] mt-2">This note stays only on this device and can be cleared via "Reset all progress" in Profile.</div>
+            </div>
+          </section>
+        );
+      }}
+
+      function Footer() {{
+        return (
+          <footer className="pt-12 pb-16" style={{ backgroundColor: brand.night, color: "white" }}>
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 grid md:grid-cols-4 gap-8">
+              <div>
+                <img src="./assets/tallo-logo.svg" alt="Tallo logo" className="h-8 w-auto" />
+                <p className="mt-4 text-sm text-white/80">Your career co‑pilot, from exploration to opportunity.</p>
+              </div>
+              <div>
+                <h4 className="font-semibold">Learn</h4>
+                <ul className="mt-2 space-y-2 text-sm text-white/80">
+                  <li><button onClick={() => setTab("explore")} className="hover:underline">Explore careers</button></li>
+                  <li><button onClick={() => setTab("quests")} className="hover:underline">Quests</button></li>
+                  <li><button onClick={() => setTab("badges")} className="hover:underline">Badges</button></li>
+                </ul>
+              </div>
+              <div>
+                <h4 className="font-semibold">Account</h4>
+                <ul className="mt-2 space-y-2 text-sm text-white/80">
+                  <li><button onClick={() => setTab("profile")} className="hover:underline">Profile</button></li>
+                  <li><button onClick={() => setTab("guardian")} className="hover:underline">Parent/Guardian</button></li>
+                </ul>
+              </div>
+              <div>
+                <h4 className="font-semibold">Progress</h4>
+                <div className="mt-3 text-sm">Points: {points}</div>
+                <div className="text-sm">Badges: {badges.length}</div>
+              </div>
+            </div>
+            <div className="mt-10 text-center text-xs text-white/60">© {new Date().getFullYear()} Tallo. All rights reserved.</div>
+          </footer>
+        );
+      }}
+
+      function App() {{
+        return (
+          <div className="min-h-screen bg-white text-[#1E0F41]">
+            <div className="w-full text-center text-sm py-2" style={{ backgroundColor: brand.lilac, color: brand.night }}>
+              🎮 Kid‑Friendly Mode • Learn about careers, earn badges, and level up your skills!
+            </div>
+            <Header />
+            {tab === "home" && <Home />}
+            {tab === "explore" && <Explore />}
+            {tab === "quests" && <Quests />}
+            {tab === "badges" && <Badges />}
+            {tab === "profile" && <Profile />}
+            {tab === "guardian" && <Guardian />}
+            <Footer />
+          </div>
+        );
+      }}
+
+      // Smoke tests
+      function runSmokeTests() {{
+        const results = [];
+        const logoPath = "./assets/tallo-logo.svg";
+        results.push({{ name: "logo path uses forward slashes", pass: !/\\/.test(logoPath) && logoPath.startsWith(".") }});
+        try {{
+          const key = "__tallo_test__";
+          const value = {{ ok: true, t: Date.now() }};
+          localStorage.setItem(key, JSON.stringify(value));
+          const back = JSON.parse(localStorage.getItem(key) || "{{}}");
+          localStorage.removeItem(key);
+          results.push({{ name: "localStorage works", pass: back.ok === true }});
+        }} catch (e) {{
+          results.push({{ name: "localStorage works", pass: false, details: String(e) }});
+        }}
+        const state = {{ interests: ["Art", "Coding", "Sports"], viewedCareers: ["software", "chef"], quests: [{{done:true}}, {{done:true}}] }};
+        const checks = [ BADGE_DEFS[0].rule(state), BADGE_DEFS[1].rule(state) ];
+        results.push({{ name: "badge rules basic", pass: checks.every(Boolean) }});
+        return results;
+      }}
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+      console.table(runSmokeTests());
+    </script>
+</body>
+</html>
